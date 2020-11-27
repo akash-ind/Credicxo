@@ -1,9 +1,11 @@
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework.utils import model_meta
 import traceback
 from django.contrib.auth.models import Group
 
+
+User = get_user_model()
 def required(value):
     """Checks if the value is specified or not"""
     if value is None:

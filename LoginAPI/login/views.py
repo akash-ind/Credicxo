@@ -1,16 +1,20 @@
 from django.shortcuts import render
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from login.serializers import UserSerializer
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import permissions
 from rest_framework.generics import ListAPIView, CreateAPIView
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.models import Group
 from .serializers import UserSerializer
 from rest_framework.response import Response
 from rest_framework import status
+from django.contrib.auth.tokens import default_token_generator
 # Create your views here.
+
+User = get_user_model()
 
 
 def genMissingErros(dct, values):
@@ -22,33 +26,6 @@ def genMissingErros(dct, values):
         if not dct.get(value):
             errors[value] = "required"
     return errors
-
-@csrf_exempt
-def createUser(request):
-    """
-    endpoint for creating Student, Teacher, admin 
-    """
-    required_values = ["first_name", "email", "last_name",
-    "username", "type", "password"]
-    errors = genMissingErros(request.POST, required_values)
-    if errors:
-        return JsonResponse(errors)
-    first_name = request.POST["first_name"]
-    last_name = request.POST["last_name"]
-    username = request.POST["username"]
-    email = request.POST["email"]
-    password = request.POST["password"]
-    type = request.POST["type"]
-    user = User(first_name=first_name,
-                last_name=last_name, email = email, username = username)
-    user.set_password(password)
-    group = Group.objects.get(name=type)
-    try:
-        user.save()
-        user.groups.add(group)
-    except Exception as e:
-        return JsonResponse({"error": str(e)})
-    return JsonResponse({"done":"user created successfully"})
 
 
 
@@ -73,6 +50,7 @@ class ListUsers(ListAPIView):
             queryset = User.objects.filter(username = user.username)
         serializer = UserSerializer(queryset, many=True)
         return Response(serializer.data)
+
 
 class CreateUser(CreateAPIView):
     """
@@ -102,7 +80,42 @@ class CreateUser(CreateAPIView):
 
 
 
-def ret_user(request):
-    user = request.user
-    print(user)
-    return JsonResponse({"user":user})
+class ForgotPassword(APIView):
+    """
+    Takes in username and sends a unique token. Token is stored in the session.
+    And from session token is verified
+    """
+    def post(self, request, format = None):
+        errors = genMissingErros(request.data, ['username'])
+        if errors:
+            return Response(errors, status = status.HTTP_400_BAD_REQUEST)
+        username = request.data['username']
+        user = User.objects.get(username=username)
+        token = default_token_generator.make_token(user)
+        request.session[token] = user.pk
+        return Response({"token":token}, status = status.HTTP_200_OK)
+
+
+
+class ChangePassword(APIView):
+    """
+    Takes POST request with 
+    new password and token and change if token is valid
+    """
+
+    def post(self, request, format = None):
+        errors = genMissingErros(request.data, ["new_password", "token"])
+        if errors:
+            return Response(errors, status = status.HTTP_400_BAD_REQUEST)
+        token = request.data["token"]
+        pk = request.session.get(token, None)
+        if pk is None:
+            return Response({"error":"Token not valid"}, 
+            status = status.HTTP_406_NOT_ACCEPTABLE)
+        user = User.objects.get(pk = pk)
+        user.set_password(request.data["new_password"])
+        del request.session[token]
+        return Response({"done":"Password reset successfully"}, 
+        status = status.HTTP_200_OK)
+
+        
