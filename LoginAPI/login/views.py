@@ -4,11 +4,12 @@ from login.serializers import UserSerializer
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import permissions
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, CreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.models import Group
 from .serializers import UserSerializer
 from rest_framework.response import Response
+from rest_framework import status
 # Create your views here.
 
 
@@ -72,6 +73,32 @@ class ListUsers(ListAPIView):
             queryset = User.objects.filter(username = user.username)
         serializer = UserSerializer(queryset, many=True)
         return Response(serializer.data)
+
+class CreateUser(CreateAPIView):
+    """
+    Create Users on whether the request came from Student, Teacher, Admin
+    """
+    permission_classes = [IsAuthenticated]
+    allowed_methods = ["POST"]
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        admin = Group.objects.get(name = "admin")
+        teacher = Group.objects.get(name = "teacher")
+        serializer = UserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if admin in user.groups.all():
+            pass
+        elif teacher in user.groups.all():
+            if request.data.get("type") != "student":
+                return Response({"error":"Operation not allowed"},
+                status = status.HTTP_401_UNAUTHORIZED)
+        else:
+            return Response({"error":"Operation not allowed"},
+                    status = status.HTTP_401_UNAUTHORIZED)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 
