@@ -9,7 +9,9 @@ the dependencies by
 ```
 pip install -r requirement.txt
 ```
-
+### Notations
+    ${variable} is used to describe value of variable
+    <value1>, <value2> means value1 or value2.
 ### API Documentation
 
 ${domain}/api/token: takes in Form with POST request
